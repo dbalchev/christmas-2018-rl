@@ -22,16 +22,16 @@ class LunarModule(torch.nn.Module):
 
 class ReinforceTrainer(SimpleTrainer):
 
-    def __init__(self, env, agent, exploration_prob, should_render=False):
-        super().__init__(env, should_render)
+    def __init__(self, env, agent, exploration_prob, **kwargs):
+        super().__init__(env, **kwargs)
         self.agent = agent
         self.optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-2)
         self.exploration_prob = exploration_prob
 
     def _choose_action(self, observation):
         with torch.no_grad():
-                action_probs = self.agent(
-                    torch.tensor([observation], dtype=torch.float32)).numpy()[0]
+            action_probs = self.agent(
+                torch.tensor([observation], dtype=torch.float32)).numpy()[0]
         chosen_action = self.rng.choice(np.arange(4), p=action_probs)
         if self.rng.uniform() < self.exploration_prob:
             chosen_action = self.rng.randint(4)

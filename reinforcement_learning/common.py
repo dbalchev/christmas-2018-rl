@@ -3,6 +3,18 @@ import torch
 from abc import ABCMeta, abstractclassmethod
 
 
+def one_hot(labels, depth):
+    """
+    >>> one_hot(torch.tensor([0, 1, 0]), 2)
+    tensor([[1., 0.],
+            [0., 1.],
+            [1., 0.]])
+    """
+    out = torch.zeros(*labels.size(), depth)
+    out.scatter_(1, labels[:, None], 1)
+    return out
+
+
 def _discount_rewards(rewards, discount):
     """
     >>> _discount_rewards([0., 0., 1., 0.], 0.5)
@@ -18,16 +30,17 @@ def _discount_rewards(rewards, discount):
 
 class SimpleTrainer(metaclass=ABCMeta):
 
-    def __init__(self, env, should_render=False):
+    def __init__(self, env, *, reward_discount, should_render=False):
         self.env = env
         self.should_render = should_render
+        self.reward_discount = reward_discount
         self.rng = np.random.RandomState()
 
         
-    def train_one_episode(self, reward_discount):
+    def train_one_episode(self):
         observations, actions, rewards = self._run_episode()
         total_reward = np.sum(rewards)
-        rewards = _discount_rewards(rewards, reward_discount)
+        rewards = _discount_rewards(rewards, self.reward_discount)
         loss = self._train_on_episode(observations, actions, rewards)
         return total_reward, loss
 
