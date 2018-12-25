@@ -31,6 +31,7 @@ class QLearningTrainer(SimpleTrainer):
         self.agent = agent
         self.optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-2)
         self.exploration_prob = exploration_prob
+        self.copy_to_target_prob = 0.1
         self.target_agent = type(agent)()
         _copy_model(self.target_agent, self.agent)
     
@@ -68,6 +69,6 @@ class QLearningTrainer(SimpleTrainer):
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        if self.rng.uniform() < 0.1:
+        if self.rng.uniform() < self.copy_to_target_prob:
             _copy_model(self.target_agent, self.agent)
         return next_step_estimated_value
