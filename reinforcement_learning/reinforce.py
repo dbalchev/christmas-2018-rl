@@ -13,11 +13,13 @@ class LunarModule(torch.nn.Module):
             torch.nn.Linear(8, self.hidden_units,),
             torch.nn.LeakyReLU(),
             last_layer,
-            torch.nn.Softmax(),
         )
     
-    def forward(self, inputs):
-        return self.model(inputs)
+    def forward(self, inputs, apply_softmax=True):
+        result = self.model(inputs)
+        if apply_softmax:
+            result = torch.nn.functional.softmax(result, dim=-1)
+        return result
 
 
 class ReinforceTrainer(SimpleTrainer):
@@ -39,13 +41,17 @@ class ReinforceTrainer(SimpleTrainer):
 
     def _train_on_episode(self, observations, actions, rewards):
         # print(rewards)
-        action_probabilities = self.agent(
-            torch.tensor(observations, dtype=torch.float32))
+        action_logits = self.agent(
+            torch.tensor(observations[:-1], dtype=torch.float32), apply_softmax=False)
+        action_probabilities = torch.nn.functional.softmax(action_logits, dim=-1)
         chosen_action_probabilities = action_probabilities[np.arange(len(actions)), actions]
         loss = -chosen_action_probabilities.log() * torch.tensor(rewards, dtype=torch.float32)
-        loss = loss.mean()
+        # action_logits_regularization = torch.nn.functional.mse_loss(
+        #     action_logits, torch.tensor(0.0))
+        loss = loss.mean() # + 1e-4 * action_logits_regularization
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
         loss_value = loss.detach().item()
+        # self.log('action_logits {}', action_logits)
         return loss_value # chosen_action_probabilities.detach().numpy()

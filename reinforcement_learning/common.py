@@ -55,6 +55,11 @@ class SimpleTrainer(metaclass=ABCMeta):
     @abstractclassmethod
     def _train_on_episode(self, observations, actions, rewards):
         pass
+
+    def log(self, format, *args, **kwargs):
+        if not self.should_render:
+            return
+        print(format.format(*args, **kwargs))
     
     def _run_episode(self):
         rewards = []
@@ -67,12 +72,11 @@ class SimpleTrainer(metaclass=ABCMeta):
             chosen_action = self._choose_action(observation)
             actions.append(chosen_action)
             observation, reward, done, _ = self.env.step(chosen_action)
-            if len(observations) > 250:
+            if len(observations) > 750:
                 done = True
                 reward += -20
             self._maybe_render()
-            if not done:
-                observations.append(observation)
+            observations.append(observation)
             rewards.append(reward)
         return observations, actions, rewards
     
