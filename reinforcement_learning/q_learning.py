@@ -21,6 +21,9 @@ class QModule(torch.nn.Module):
             torch.cat([observation, one_hot_action], dim=1))[..., 0]
 
 
+def _copy_model(dest, src):
+    dest.load_state_dict(src.state_dict())
+
 class QLearningTrainer(SimpleTrainer):
 
     def __init__(self, env, agent, exploration_prob, **kwargs):
@@ -28,6 +31,8 @@ class QLearningTrainer(SimpleTrainer):
         self.agent = agent
         self.optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-2)
         self.exploration_prob = exploration_prob
+        self.target_agent = type(agent)()
+        _copy_model(self.target_agent, self.agent)
     
     def _choose_action(self, observation):
         with torch.no_grad():
@@ -55,10 +60,14 @@ class QLearningTrainer(SimpleTrainer):
             losses.append(torch.nn.functional.l1_loss(
                 current_step_estimated_value, 
                 torch.tensor(target)))
-            next_step_estimated_value = (
-                current_step_estimated_value.detach().item())
+            with torch.no_grad():
+                next_step_estimated_value = self.target_agent(
+                    torch.tensor([observations[i]], dtype=torch.float32), 
+                    torch.tensor([actions[i]])).item()
         loss = torch.mean(torch.stack(losses))
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+        if self.rng.uniform() < 0.1:
+            _copy_model(self.target_agent, self.agent)
         return next_step_estimated_value
