@@ -83,11 +83,7 @@ class ReinforceTrainer:
             torch.tensor(observations, dtype=torch.float32))
         chosen_action_probabilities = action_probabilities[np.arange(len(actions)), actions]
         loss = -chosen_action_probabilities.log() * torch.tensor(rewards, dtype=torch.float32)
-        # reg_loss = 0
-        # for param in self.agent.parameters():
-        #     reg_loss += torch.nn.functional.mse_loss(
-        #         param, torch.tensor(0.), size_average=False)
-        loss = loss.mean() # + reg_loss * 1e-6
+        loss = loss.mean()
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
