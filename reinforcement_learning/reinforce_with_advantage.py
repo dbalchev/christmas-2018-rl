@@ -19,8 +19,10 @@ class LunarValueModule(torch.nn.Module):
 
 class ReinforceWithAdvantageTrainer(ReinforceTrainer):
 
-        def __init__(self, env, agent, value_module, should_render=False):
-            super().__init__(env, agent, should_render)
+        def __init__(
+                self, env, agent, value_module, 
+                exploration_prob, should_render=False):
+            super().__init__(env, agent, exploration_prob, should_render)
             self.value_module = value_module
             self.value_optimizer = torch.optim.Adam(
                 self.value_module.parameters(), lr=1e-3)
