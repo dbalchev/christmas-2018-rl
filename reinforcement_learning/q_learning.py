@@ -17,9 +17,6 @@ class QModule(torch.nn.Module):
             raise ValueError(
                 'Unsupported observation space rank != 1 {}'.format(
                     env.observation_space.shape))
-        if not isinstance(env.action_space, Discrete):
-            raise ValueError('Unsupported action space {}'.format(action_space))
-
         super().__init__()
         self.num_actions = env.action_space.n
         self.hidden_units = hidden_units

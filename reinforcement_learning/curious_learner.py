@@ -1,5 +1,6 @@
 from collections import namedtuple
 
+from gym.spaces import Discrete, Box
 import numpy as np
 import torch
 
@@ -10,37 +11,58 @@ CuriousModelFamily = namedtuple('CuriousModelFamily',
     ['forward_model', 'inverse_model', 'embedder'])
 
 
-def lunar_embedder(embedding_units):
+def lunar_embedder(env, embedding_units):
+    if not isinstance(env.observation_space, Box):
+        raise ValueError(
+            'Unsupported observation space {}'.format(
+                env.observation_space))
+    if len(env.observation_space.shape) != 1:
+        raise ValueError(
+            'Unsupported observation space rank != 1 {}'.format(
+                env.observation_space.shape))
+
     return torch.nn.Sequential(
-        torch.nn.Linear(8, embedding_units, bias=False)
+        torch.nn.Linear(
+            env.observation_space.shape[0], embedding_units, bias=False)
     )
 
 
 class LunarForwardModel(torch.nn.Module):
 
-    def __init__(self, embedding_units):
+    def __init__(self, env, embedding_units):
+        if not isinstance(env.action_space, Discrete):
+            raise ValueError(
+                'Unsupported action space {}'.format(env.action_space))
+
         super().__init__()
+        self.num_actions = env.action_space.n
         hidden_state_size = 48
         self.model = torch.nn.Sequential(
-            torch.nn.Linear(embedding_units + 4, hidden_state_size),
+            torch.nn.Linear(
+                embedding_units + self.num_actions, hidden_state_size),
             torch.nn.LeakyReLU(),
             torch.nn.Linear(hidden_state_size, embedding_units, bias=False))
     
     def forward(self, state_embedding, action):
-        one_hot_action = one_hot(action, 4)
+        one_hot_action = one_hot(action, self.num_actions)
         return self.model(
             torch.cat([state_embedding, one_hot_action], dim=-1))
 
 
 class LunarInverseModel(torch.nn.Module):
     
-    def __init__(self, embedding_units):
+    def __init__(self, env, embedding_units):
+        if not isinstance(env.action_space, Discrete):
+            raise ValueError(
+                'Unsupported action space {}'.format(env.action_space))
         super().__init__()
+        self.num_actions = env.action_space.n
+
         hidden_state_size = 48
         self.model = torch.nn.Sequential(
             torch.nn.Linear(2 * embedding_units, hidden_state_size),
             torch.nn.LeakyReLU(),
-            torch.nn.Linear(hidden_state_size, 4, bias=False),
+            torch.nn.Linear(hidden_state_size, self.num_actions, bias=False),
             torch.nn.Softmax())
 
     def forward(self, current_state_embedding, next_state_embedding):
