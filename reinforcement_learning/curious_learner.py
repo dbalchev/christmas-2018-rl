@@ -63,7 +63,7 @@ class LunarInverseModel(torch.nn.Module):
             torch.nn.Linear(2 * embedding_units, hidden_state_size),
             torch.nn.LeakyReLU(),
             torch.nn.Linear(hidden_state_size, self.num_actions, bias=False),
-            torch.nn.Softmax())
+            torch.nn.Softmax(dim=-1))
 
     def forward(self, current_state_embedding, next_state_embedding):
         return self.model(

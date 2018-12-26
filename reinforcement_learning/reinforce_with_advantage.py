@@ -1,14 +1,11 @@
-from gym.spaces import Discrete, Box
+from gym.spaces import Box
 import torch
 
 from reinforcement_learning.reinforce import ReinforceTrainer
 
 
-class LunarValueModule(torch.nn.Module):
+class MLPValueModule(torch.nn.Module):
     def __init__(self, env, hidden_units):
-        if not isinstance(env.action_space, Discrete):
-            raise ValueError(
-                'Unsupported action space {}'.format(env.action_space))
         if not isinstance(env.observation_space, Box):
             raise ValueError(
                 'Unsupported observation space {}'.format(
@@ -41,7 +38,7 @@ class ReinforceWithAdvantageTrainer(ReinforceTrainer):
 
         def _train_on_episode(self, observations, actions, rewards):
             expected_rewards = self.value_module(
-                torch.tensor(observations, dtype=torch.float32))
+                torch.tensor(observations[:-1], dtype=torch.float32))
             advantage = torch.tensor(rewards) - expected_rewards
             detached_advantage = advantage.detach().numpy()
             l2_loss = torch.nn.functional.mse_loss(

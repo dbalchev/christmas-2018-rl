@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractclassmethod
 
-from gym.spaces import Discrete
+from gym.spaces import Box, Discrete
 import numpy as np
 import torch
 
@@ -34,12 +34,20 @@ class SimpleTrainer(metaclass=ABCMeta):
 
     def __init__(
             self, env, *, reward_discount, should_render=False, 
-            exploration_prob=0.0):
+            exploration_prob=0.0, box_action_std_unscalled=0.25):
         self.env = env
         self.should_render = should_render
         self.reward_discount = reward_discount
         self.rng = np.random.RandomState()
         self.exploration_prob = exploration_prob
+        if isinstance(env.action_space, Box):
+            self.box_action_std = box_action_std_unscalled * (
+                env.action_space.high - env.action_space.low)
+            box_action_std_t = torch.tensor(
+                self.box_action_std, dtype=torch.float32)
+            self.box_action_distribution = torch.distributions.Normal(
+                torch.zeros_like(box_action_std_t),
+                box_action_std_t)
         
     def train_one_episode(self):
         observations, actions, rewards = self._run_episode()
@@ -89,6 +97,14 @@ class SimpleTrainer(metaclass=ABCMeta):
         if isinstance(action_space, Discrete):
             assert model_result.shape == (action_space.n, )
             return self.rng.choice(action_space.n, p=model_result)
+        if isinstance(action_space, Box):
+            assert model_result.shape == action_space.shape
+            model_result += self.rng.normal(
+                0, self.box_action_std, size=model_result.shape)
+            model_result = np.clip(
+                model_result, action_space.low, action_space.high)
+            return model_result
+            
         raise ValueError('Unsupported action space {}'.format(action_space))
 
     def _sample_action(self, model_result):
