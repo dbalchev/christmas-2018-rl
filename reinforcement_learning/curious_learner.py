@@ -76,21 +76,30 @@ class CuriousLearnerMixin:
     def __init__(self, model_family, **kwargs):
         super().__init__(**kwargs)
         self.model_family = model_family
-        self.model_optimizer = torch.optim.Adam(
+        self.optimizer = torch.optim.Adam(
+            list(self.agent.parameters()) +
             list(model_family.forward_model.parameters()) + 
             list(model_family.inverse_model.parameters()) + 
-            list(model_family.embedder.parameters()),
-            lr=1e-3)
+            list(model_family.embedder.parameters()), 
+            # [
+            #     {'params': list(self.agent.parameters())},
+            #     {
+            #         'params': (
+            #             list(model_family.forward_model.parameters()) + 
+            #             list(model_family.inverse_model.parameters()) + 
+            #             list(model_family.embedder.parameters())),
+            #         'lr': 1e-3,
+            #     },
+            # ],
+            lr=1e-2)
+        self.curiosity_loss = None
 
     def _run_episode(self):
         observations, actions, rewards = super()._run_episode()
         rewards = np.array(rewards)
         reward_updates, curiosity_loss = self._rewards_updates(
             observations, actions)
-        self.model_optimizer.zero_grad()
-        curiosity_loss.backward()
-        self.model_optimizer.step()
-        return observations, actions, rewards
+        return observations, actions, rewards + reward_updates
     
     def _rewards_updates(self, observations, actions):
         reward_updates = []
@@ -113,10 +122,13 @@ class CuriousLearnerMixin:
                 predicted_action_probs, action_t)
             curiosity_loss += action_loss + surprise
         reward_updates = np.array(reward_updates)
-        reward_updates *= 20
         # self.log('curiosity_loss {}', curiosity_loss)
         # self.log('reward_updates {}', reward_updates)
+        self.curiosity_loss = curiosity_loss
         return reward_updates, curiosity_loss
 
 class ReinforceCuriousLearner(CuriousLearnerMixin, ReinforceTrainer):
-    pass
+    def _postprocess_loss(self, normal_loss):
+        loss = normal_loss + self.curiosity_loss
+        self.curiosity_loss = None
+        return loss

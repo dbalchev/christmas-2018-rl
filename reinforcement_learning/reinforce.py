@@ -58,6 +58,7 @@ class ReinforceTrainer(SimpleTrainer):
         # action_logits_regularization = torch.nn.functional.mse_loss(
         #     action_logits, torch.tensor(0.0))
         loss = loss.mean() # + 1e-4 * action_logits_regularization
+        loss = self._postprocess_loss(loss)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -71,3 +72,6 @@ class ReinforceTrainer(SimpleTrainer):
             assert action_logits.size()[-1] == action_space.n
             return action_logits[np.arange(len(actions)), actions]
         raise ValueError('Unsupported action space {}'.format(action_space)) 
+
+    def _postprocess_loss(self, normal_loss):
+        return normal_loss
