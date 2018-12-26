@@ -1,6 +1,8 @@
+from abc import ABCMeta, abstractclassmethod
+
+from gym.spaces import Discrete
 import numpy as np
 import torch
-from abc import ABCMeta, abstractclassmethod
 
 
 def one_hot(labels, depth):
@@ -30,12 +32,14 @@ def _discount_rewards(rewards, discount):
 
 class SimpleTrainer(metaclass=ABCMeta):
 
-    def __init__(self, env, *, reward_discount, should_render=False):
+    def __init__(
+            self, env, *, reward_discount, should_render=False, 
+            exploration_prob=0.0):
         self.env = env
         self.should_render = should_render
         self.reward_discount = reward_discount
         self.rng = np.random.RandomState()
-
+        self.exploration_prob = exploration_prob
         
     def train_one_episode(self):
         observations, actions, rewards = self._run_episode()
@@ -80,3 +84,14 @@ class SimpleTrainer(metaclass=ABCMeta):
             rewards.append(reward)
         return observations, actions, rewards
     
+    def _sample_model_action(self, model_result):
+        action_space = self.env.action_space
+        if isinstance(action_space, Discrete):
+            assert model_result.shape == (action_space.n, )
+            return self.rng.choice(action_space.n, p=model_result)
+        raise ValueError('Unsupported action space {}'.format(action_space))
+
+    def _sample_action(self, model_result):
+        if self.rng.uniform() < self.exploration_prob:
+            return self.env.action_space.sample()
+        return self._sample_model_action(model_result)

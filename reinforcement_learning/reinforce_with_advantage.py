@@ -1,15 +1,28 @@
+from gym.spaces import Discrete, Box
 import torch
+
 from reinforcement_learning.reinforce import ReinforceTrainer
 
 
 class LunarValueModule(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, env, hidden_units):
+        if not isinstance(env.action_space, Discrete):
+            raise ValueError(
+                'Unsupported action space {}'.format(env.action_space))
+        if not isinstance(env.observation_space, Box):
+            raise ValueError(
+                'Unsupported observation space {}'.format(
+                    env.observation_space))
+        if len(env.observation_space.shape) != 1:
+            raise ValueError(
+                'Unsupported observation space rank != 1 {}'.format(
+                    env.observation_space.shape))
         super().__init__()
-        self.hidden_units = 48
+        self.hidden_units = hidden_units
         last_layer = torch.nn.Linear(self.hidden_units, 1, bias=False)
         last_layer.weight.data.zero_()
         self.model = torch.nn.Sequential(
-            torch.nn.Linear(8, self.hidden_units,),
+            torch.nn.Linear(env.observation_space.shape[0], self.hidden_units,),
             torch.nn.LeakyReLU(),
             last_layer,
         )
@@ -20,9 +33,8 @@ class LunarValueModule(torch.nn.Module):
 class ReinforceWithAdvantageTrainer(ReinforceTrainer):
 
         def __init__(
-                self, env, agent, value_module, 
-                exploration_prob, **kwargs):
-            super().__init__(env, agent, exploration_prob, **kwargs)
+                self, env, agent, value_module, **kwargs):
+            super().__init__(env, agent, **kwargs)
             self.value_module = value_module
             self.value_optimizer = torch.optim.Adam(
                 self.value_module.parameters(), lr=1e-3)

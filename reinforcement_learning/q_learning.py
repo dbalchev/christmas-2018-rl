@@ -1,22 +1,40 @@
+from gym.spaces import Discrete, Box
 import numpy as np
 import torch
 
 from reinforcement_learning.common import SimpleTrainer, one_hot
 
 class QModule(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, env, hidden_units):
+        if not isinstance(env.action_space, Discrete):
+            raise ValueError(
+                'Unsupported action space {}'.format(env.action_space))
+        if not isinstance(env.observation_space, Box):
+            raise ValueError(
+                'Unsupported observation space {}'.format(
+                    env.observation_space))
+        if len(env.observation_space.shape) != 1:
+            raise ValueError(
+                'Unsupported observation space rank != 1 {}'.format(
+                    env.observation_space.shape))
+        if not isinstance(env.action_space, Discrete):
+            raise ValueError('Unsupported action space {}'.format(action_space))
+
         super().__init__()
-        self.hidden_units = 48
+        self.num_actions = env.action_space.n
+        self.hidden_units = hidden_units
         last_layer = torch.nn.Linear(self.hidden_units, 1, bias=False)
         last_layer.weight.data.zero_()
         self.model = torch.nn.Sequential(
-            torch.nn.Linear(8 + 4, self.hidden_units,),
+            torch.nn.Linear(
+                env.observation_space.shape[0] + self.num_actions, 
+                self.hidden_units,),
             torch.nn.LeakyReLU(),
             last_layer,
         )
     
     def forward(self, observation, action):
-        one_hot_action = one_hot(action, 4)
+        one_hot_action = one_hot(action, self.num_actions)
         return self.model(
             torch.cat([observation, one_hot_action], dim=1))[..., 0]
 
@@ -26,13 +44,16 @@ def _copy_model(dest, src):
 
 class QLearningTrainer(SimpleTrainer):
 
-    def __init__(self, env, agent, exploration_prob, **kwargs):
+    def __init__(self, env, agent, target_agent=None, **kwargs):
+        if not isinstance(env.action_space, Discrete):
+            raise ValueError('Unsupported action space {}'.format(action_space))
         super().__init__(env, **kwargs)
         self.agent = agent
         self.optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-2)
-        self.exploration_prob = exploration_prob
         self.copy_to_target_prob = 0.1
-        self.target_agent = type(agent)()
+        if target_agent is None:
+            target_agent = type(agent)()
+        self.target_agent = target_agent
         _copy_model(self.target_agent, self.agent)
     
     def _choose_action(self, observation):
@@ -42,9 +63,9 @@ class QLearningTrainer(SimpleTrainer):
             action_values = [
                 self.agent(
                     observation_t, torch.tensor([action])).numpy()[0]
-                for action in range(4)]
+                for action in range(self.env.action_space.n)]
         if self.rng.uniform() < self.exploration_prob:
-            chosen_action = self.rng.randint(4)
+            chosen_action = self.env.action_space.sample()
         else:
             chosen_action = np.argmax(action_values)
         return chosen_action
