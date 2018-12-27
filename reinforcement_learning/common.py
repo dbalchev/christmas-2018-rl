@@ -111,3 +111,30 @@ class SimpleTrainer(metaclass=ABCMeta):
         if self.rng.uniform() < self.exploration_prob:
             return self.env.action_space.sample()
         return self._sample_model_action(model_result)
+
+
+class Scaler(torch.nn.Module):
+
+    def __init__(self, low, high):
+        super().__init__()
+        self.low = torch.tensor(low, dtype=torch.float32)
+        self.delta = torch.tensor(
+            high - low, dtype=torch.float32)
+    
+    def forward(self, inputs):
+        return self.low + self.delta * inputs
+
+
+def copy_model(dest, src):
+    dest.load_state_dict(src.state_dict())
+
+
+def polyak_update(dest, src, rate):
+    dest_dict = dest.state_dict()
+    src_dict = src.state_dict()
+    assert dest_dict.keys() == src_dict.keys()
+    new_dest_dict = {
+        key: rate * dest_dict[key] + (1 - rate) * src_dict[key]
+        for key in dest_dict
+    }
+    dest.load_state_dict(new_dest_dict)

@@ -2,7 +2,7 @@ from gym.spaces import Discrete, Box
 import numpy as np
 import torch
 
-from reinforcement_learning.common import SimpleTrainer, one_hot
+from reinforcement_learning.common import SimpleTrainer, one_hot, copy_model
 
 class QModule(torch.nn.Module):
     def __init__(self, env, hidden_units):
@@ -36,9 +36,6 @@ class QModule(torch.nn.Module):
             torch.cat([observation, one_hot_action], dim=1))[..., 0]
 
 
-def _copy_model(dest, src):
-    dest.load_state_dict(src.state_dict())
-
 class QLearningTrainer(SimpleTrainer):
 
     def __init__(self, env, agent, target_agent=None, **kwargs):
@@ -51,7 +48,7 @@ class QLearningTrainer(SimpleTrainer):
         if target_agent is None:
             target_agent = type(agent)()
         self.target_agent = target_agent
-        _copy_model(self.target_agent, self.agent)
+        copy_model(self.target_agent, self.agent)
     
     def _choose_action(self, observation):
         with torch.no_grad():
@@ -88,5 +85,5 @@ class QLearningTrainer(SimpleTrainer):
         loss.backward()
         self.optimizer.step()
         if self.rng.uniform() < self.copy_to_target_prob:
-            _copy_model(self.target_agent, self.agent)
+            copy_model(self.target_agent, self.agent)
         return next_step_estimated_value

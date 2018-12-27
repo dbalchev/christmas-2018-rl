@@ -2,18 +2,7 @@ from gym.spaces import Discrete, Box
 import numpy as np
 import torch
 
-from reinforcement_learning.common import SimpleTrainer
-
-class _Scaler(torch.nn.Module):
-
-    def __init__(self, low, high):
-        super().__init__()
-        self.low = torch.tensor(low, dtype=torch.float32)
-        self.delta = torch.tensor(
-            high - low, dtype=torch.float32)
-    
-    def forward(self, inputs):
-        return self.low + self.delta * inputs
+from reinforcement_learning.common import SimpleTrainer, Scaler
 
 
 class MLPReinforceModel(torch.nn.Module):
@@ -58,7 +47,7 @@ class MLPReinforceModel(torch.nn.Module):
             return [
                 last_layer,
                 torch.nn.Sigmoid(),
-                _Scaler(env.action_space.low, env.action_space.high),
+                Scaler(env.action_space.low, env.action_space.high),
             ]
         raise ValueError(
                 'Unsupported action space {}'.format(env.action_space))
