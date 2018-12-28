@@ -53,7 +53,7 @@ class MLPReinforceModel(torch.nn.Module):
                 'Unsupported action space {}'.format(env.action_space))
 
 
-class ReinforceTrainer(SimpleTrainer):
+class PolicyOptimizationTrainer(SimpleTrainer):
 
     def __init__(self, env, agent, **kwargs):
         super().__init__(env, **kwargs)
@@ -66,6 +66,24 @@ class ReinforceTrainer(SimpleTrainer):
                 torch.tensor([observation], dtype=torch.float32)).numpy()[0]
         return self._sample_action(action_probs)
 
+    def _chosen_action_log_probabilities(self, action_logits, actions):
+        action_space = self.env.action_space
+        if isinstance(action_space, Discrete):
+            assert action_logits.size()[-1] == action_space.n
+            return action_logits[np.arange(len(actions)), actions].log()
+        if isinstance(action_space, Box):
+            assert action_space.shape == action_space.shape
+            actions = torch.tensor(actions, dtype=torch.float32)
+            per_action_log_prob = self.box_action_distribution.log_prob(
+                action_logits - actions)
+            return per_action_log_prob.sum(dim=-1)
+        raise ValueError('Unsupported action space {}'.format(action_space)) 
+
+    def _postprocess_loss(self, normal_loss):
+        return normal_loss
+
+
+class ReinforceTrainer(PolicyOptimizationTrainer):
     def _train_on_episode(self, observations, actions, rewards):
         # print(rewards)
         action_logits = self.agent(
@@ -84,19 +102,3 @@ class ReinforceTrainer(SimpleTrainer):
         loss_value = loss.detach().item()
         # self.log('action_logits {}', action_logits)
         return loss_value # chosen_action_log_probabilities.detach().numpy()
-
-    def _chosen_action_log_probabilities(self, action_logits, actions):
-        action_space = self.env.action_space
-        if isinstance(action_space, Discrete):
-            assert action_logits.size()[-1] == action_space.n
-            return action_logits[np.arange(len(actions)), actions].log()
-        if isinstance(action_space, Box):
-            assert action_space.shape == action_space.shape
-            actions = torch.tensor(actions, dtype=torch.float32)
-            per_action_log_prob = self.box_action_distribution.log_prob(
-                action_logits - actions)
-            return per_action_log_prob.sum(dim=-1)
-        raise ValueError('Unsupported action space {}'.format(action_space)) 
-
-    def _postprocess_loss(self, normal_loss):
-        return normal_loss

@@ -43,12 +43,15 @@ class SimpleTrainer(metaclass=ABCMeta):
         if isinstance(env.action_space, Box):
             self.box_action_std = box_action_std_unscalled * (
                 env.action_space.high - env.action_space.low)
-            box_action_std_t = torch.tensor(
-                self.box_action_std, dtype=torch.float32)
-            self.box_action_distribution = torch.distributions.Normal(
-                torch.zeros_like(box_action_std_t),
-                box_action_std_t)
-        
+    
+    @property
+    def box_action_distribution(self):
+        box_action_std_t = torch.tensor(
+            self.box_action_std, dtype=torch.float32)
+        return torch.distributions.Normal(
+            torch.zeros_like(box_action_std_t),
+            box_action_std_t)
+
     def train_one_episode(self):
         observations, actions, rewards = self._run_episode()
         total_reward = np.sum(rewards)
@@ -86,7 +89,6 @@ class SimpleTrainer(metaclass=ABCMeta):
             observation, reward, done, _ = self.env.step(chosen_action)
             if len(observations) > 750:
                 done = True
-                reward += -20
             self._maybe_render()
             observations.append(observation)
             rewards.append(reward)

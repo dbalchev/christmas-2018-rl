@@ -27,24 +27,27 @@ class MLPValueModule(torch.nn.Module):
     def forward(self, inputs):
         return self.model(inputs)[:, 0]
 
-class ReinforceWithAdvantageTrainer(ReinforceTrainer):
 
-        def __init__(
-                self, env, agent, value_module, **kwargs):
-            super().__init__(env, agent, **kwargs)
-            self.value_module = value_module
-            self.value_optimizer = torch.optim.Adam(
-                self.value_module.parameters(), lr=1e-3)
+class AdvantageMixin:
+    def __init__(
+            self, env, agent, value_module, **kwargs):
+        super().__init__(env, agent, **kwargs)
+        self.value_module = value_module
+        self.value_optimizer = torch.optim.Adam(
+            self.value_module.parameters(), lr=1e-3)
 
-        def _train_on_episode(self, observations, actions, rewards):
-            expected_rewards = self.value_module(
-                torch.tensor(observations[:-1], dtype=torch.float32))
-            advantage = torch.tensor(rewards) - expected_rewards
-            detached_advantage = advantage.detach().numpy()
-            l2_loss = torch.nn.functional.mse_loss(
-                advantage, torch.tensor(0.0))
-            self.value_optimizer.zero_grad()
-            l2_loss.backward()
-            self.value_optimizer.step()
-            return super()._train_on_episode(
-                observations, actions, detached_advantage)
+    def _train_on_episode(self, observations, actions, rewards):
+        expected_rewards = self.value_module(
+            torch.tensor(observations[:-1], dtype=torch.float32))
+        advantage = torch.tensor(rewards) - expected_rewards
+        detached_advantage = advantage.detach().numpy()
+        l2_loss = torch.nn.functional.mse_loss(
+            advantage, torch.tensor(0.0))
+        self.value_optimizer.zero_grad()
+        l2_loss.backward()
+        self.value_optimizer.step()
+        return super()._train_on_episode(
+            observations, actions, detached_advantage)
+
+class ReinforceWithAdvantageTrainer(AdvantageMixin, ReinforceTrainer):
+    pass
