@@ -157,5 +157,6 @@ class BasicPPO(PolicyOptimizationTrainer):
             clipped_relative_prob * rewards_t).mean()
         self.optimizer.zero_grad()
         (-objective).backward()
+        self.optimizer.step()
         return objective.detach().item()
         
