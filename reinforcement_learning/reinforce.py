@@ -20,6 +20,9 @@ class MLPReinforceModel(torch.nn.Module):
         self.model = torch.nn.Sequential(
             torch.nn.Linear(env.observation_space.shape[0], self.hidden_units,),
             torch.nn.LeakyReLU(),
+            torch.nn.Linear(self.hidden_units, self.hidden_units,),
+            torch.nn.LeakyReLU(),
+
             *self._choose_last_layers(env),
         )
     
@@ -102,3 +105,30 @@ class ReinforceTrainer(PolicyOptimizationTrainer):
         loss_value = loss.detach().item()
         # self.log('action_logits {}', action_logits)
         return loss_value # chosen_action_log_probabilities.detach().numpy()
+
+
+class BasicPPO(PolicyOptimizationTrainer):
+    def __init__(self, ppo_clip_ratio, **kwargs):
+        super().__init__(**kwargs)
+        self.ppo_clip_ratio = ppo_clip_ratio
+
+    def _train_on_episode(self, observations, actions, rewards):
+        action_logits = self.agent(
+            torch.tensor(observations[:-1], dtype=torch.float32))
+        chosen_action_log_probabilities = self._chosen_action_log_probabilities(
+            action_logits, actions)
+        relative_prob = (
+            chosen_action_log_probabilities - 
+            chosen_action_log_probabilities.detach()).exp()
+        clipped_relative_prob = torch.clamp(
+            relative_prob, 
+            1 - self.ppo_clip_ratio,
+            1 + self.ppo_clip_ratio)
+        rewards_t = torch.tensor(rewards, dtype=torch.float32)
+        objective = torch.min(
+            relative_prob * rewards_t,
+            clipped_relative_prob * rewards_t).mean()
+        self.optimizer.zero_grad()
+        (-objective).backward()
+        return objective.detach().item()
+        

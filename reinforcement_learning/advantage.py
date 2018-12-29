@@ -1,7 +1,8 @@
 from gym.spaces import Box
 import torch
 
-from reinforcement_learning.reinforce import ReinforceTrainer
+from reinforcement_learning.reinforce import (
+    ReinforceTrainer, BasicPPO)
 
 
 class MLPValueModule(torch.nn.Module):
@@ -21,6 +22,8 @@ class MLPValueModule(torch.nn.Module):
         self.model = torch.nn.Sequential(
             torch.nn.Linear(env.observation_space.shape[0], self.hidden_units,),
             torch.nn.LeakyReLU(),
+            torch.nn.Linear(self.hidden_units, self.hidden_units,),
+            torch.nn.LeakyReLU(),
             last_layer,
         )
     
@@ -31,7 +34,7 @@ class MLPValueModule(torch.nn.Module):
 class AdvantageMixin:
     def __init__(
             self, env, agent, value_module, **kwargs):
-        super().__init__(env, agent, **kwargs)
+        super().__init__(env=env, agent=agent, **kwargs)
         self.value_module = value_module
         self.value_optimizer = torch.optim.Adam(
             self.value_module.parameters(), lr=1e-3)
@@ -49,5 +52,10 @@ class AdvantageMixin:
         return super()._train_on_episode(
             observations, actions, detached_advantage)
 
+
 class ReinforceWithAdvantageTrainer(AdvantageMixin, ReinforceTrainer):
+    pass
+
+
+class PPOTrainer(AdvantageMixin, BasicPPO):
     pass
