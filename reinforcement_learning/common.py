@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractclassmethod
+from collections import UserList
 
 from gym.spaces import Box, Discrete
 import numpy as np
@@ -29,6 +30,15 @@ def _discount_rewards(rewards, discount):
         discounted_rewards.append(current_reward)
     discounted_rewards.reverse()
     return discounted_rewards
+
+
+def zip_dictionaries(dicts):
+    keys = dicts[0].keys()
+    return {
+        key: [d[key] for d in dicts]
+        for key in keys
+    }
+
 
 class SimpleTrainer(metaclass=ABCMeta):
 
@@ -69,9 +79,16 @@ class SimpleTrainer(metaclass=ABCMeta):
     def _choose_action(self, observation):
         pass
     
-    @abstractclassmethod
     def _train_on_episode(self, observations, actions, rewards):
-        pass
+        buffer = ReplayBuffer()
+        buffer.append_train_one_episode_result(
+            observations, actions, rewards)
+        dict_of_lists = zip_dictionaries(buffer)
+        return self._train_on_replay_buffer(dict_of_lists)
+    
+    def _train_on_replay_buffer(self, replay_buffer_sample):
+        raise NotImplemented(
+            'Implement either _train_on_episode or _train_on_replay_buffer')
 
     def log(self, format, *args, **kwargs):
         if not self.should_render:
@@ -127,6 +144,37 @@ class Scaler(torch.nn.Module):
     
     def forward(self, inputs):
         return self.low + self.delta * inputs
+
+
+class ReplayBuffer(UserList):
+    def __init__(self, *args, rng=None, max_size=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.max_size = max_size
+        self.rng = rng
+        if max_size and not rng:
+            raise ValueError('If there is a max_size pass rng')
+    
+    def append_train_one_episode_result(
+            self, observations, actions, rewards):
+        for i in range(len(observations) - 1):
+            self.append({
+                'current_state': observations[i],
+                'future_state': observations[i + 1],
+                'action': actions[i],
+                'reward': rewards[i],
+                'done': i + 2 == len(observations),
+            })
+        self._clip_if_more_elements()
+    
+    def _clip_if_more_elements(self):
+        if not self.max_size:
+            return
+        if len(self) <= self.max_size:
+            return
+        self.data = (
+            self.rng.choice(
+                self.data, self.max_size, replace=False).
+            tolist())
 
 
 def copy_model(dest, src):

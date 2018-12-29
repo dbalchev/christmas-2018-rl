@@ -114,10 +114,12 @@ class PolicyOptimizationTrainer(SimpleTrainer):
 
 
 class ReinforceTrainer(PolicyOptimizationTrainer):
-    def _train_on_episode(self, observations, actions, rewards):
-        # print(rewards)
+    def _train_on_replay_buffer(self, replay_buffer_sample):
+        observations = replay_buffer_sample['current_state']
+        rewards = replay_buffer_sample['reward']
+        actions = replay_buffer_sample['action']
         action_logits = self.agent(
-            torch.tensor(observations[:-1], dtype=torch.float32))
+            torch.tensor(observations, dtype=torch.float32))
         chosen_action_log_probabilities = self._chosen_action_log_probabilities(
             action_logits, actions)
         loss = -chosen_action_log_probabilities * torch.tensor(
@@ -139,9 +141,12 @@ class BasicPPO(PolicyOptimizationTrainer):
         super().__init__(**kwargs)
         self.ppo_clip_ratio = ppo_clip_ratio
 
-    def _train_on_episode(self, observations, actions, rewards):
+    def _train_on_replay_buffer(self, replay_buffer_sample):
+        observations = replay_buffer_sample['current_state']
+        rewards = replay_buffer_sample['reward']
+        actions = replay_buffer_sample['action']
         action_logits = self.agent(
-            torch.tensor(observations[:-1], dtype=torch.float32))
+            torch.tensor(observations, dtype=torch.float32))
         chosen_action_log_probabilities = self._chosen_action_log_probabilities(
             action_logits, actions)
         relative_prob = (

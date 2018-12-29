@@ -3,7 +3,8 @@ import torch
 
 from gym.spaces import Box
 
-from reinforcement_learning.common import SimpleTrainer, polyak_update
+from reinforcement_learning.common import (
+    SimpleTrainer, polyak_update, zip_dictionaries)
 
 
 def _t(v):
@@ -41,12 +42,6 @@ class BoxQModule(torch.nn.Module):
         return self.model(
             torch.cat([observation, action], dim=-1))[..., 0]
 
-def _zip_dictionaries(dicts):
-    keys = dicts[0].keys()
-    return {
-        key: [d[key] for d in dicts]
-        for key in keys
-    }
 
 class DDPGTrainer(SimpleTrainer):
     def __init__(
@@ -98,7 +93,7 @@ class DDPGTrainer(SimpleTrainer):
     def _actual_training(self):
         replay_buffer_sample = self.rng.choice(
             self.replay_buffer, self.batch_size)
-        replay_buffer = _zip_dictionaries(replay_buffer_sample)
+        replay_buffer = zip_dictionaries(replay_buffer_sample)
         current_state_t = _t(replay_buffer['current_state'])
         future_state_t = _t(replay_buffer['future_state'])
         action_t = _t(replay_buffer['action'])

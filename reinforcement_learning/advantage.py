@@ -39,9 +39,11 @@ class AdvantageMixin:
         self.value_optimizer = torch.optim.Adam(
             self.value_module.parameters(), lr=1e-3)
 
-    def _train_on_episode(self, observations, actions, rewards):
+    def _train_on_replay_buffer(self, replay_buffer_sample):
+        observations = replay_buffer_sample['current_state']
+        rewards = replay_buffer_sample['reward']
         expected_rewards = self.value_module(
-            torch.tensor(observations[:-1], dtype=torch.float32))
+            torch.tensor(observations, dtype=torch.float32))
         advantage = torch.tensor(rewards) - expected_rewards
         detached_advantage = advantage.detach().numpy()
         l2_loss = torch.nn.functional.mse_loss(
@@ -49,8 +51,7 @@ class AdvantageMixin:
         self.value_optimizer.zero_grad()
         l2_loss.backward()
         self.value_optimizer.step()
-        return super()._train_on_episode(
-            observations, actions, detached_advantage)
+        return super()._train_on_replay_buffer(replay_buffer_sample)
 
 
 class ReinforceWithAdvantageTrainer(AdvantageMixin, ReinforceTrainer):
