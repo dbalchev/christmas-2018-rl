@@ -58,10 +58,37 @@ class MLPReinforceModel(torch.nn.Module):
 
 class PolicyOptimizationTrainer(SimpleTrainer):
 
-    def __init__(self, env, agent, **kwargs):
-        super().__init__(env, **kwargs)
+    def __init__(self, agent, **kwargs):
+        super().__init__(**kwargs)
         self.agent = agent
-        self.optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-3)
+        self.additional_parameters = {}
+        if isinstance(self.env.action_space, Box):
+            self.additional_parameters['log_box_action_std'] = (
+                torch.tensor(
+                    np.log(super().box_action_std), 
+                    dtype=torch.float32,
+                    requires_grad=True))
+        self.optimizer = torch.optim.Adam(
+            list(self.agent.parameters()) + 
+            list(self.additional_parameters.values()), 
+            lr=1e-3)
+
+    @property
+    def box_action_std(self):
+        return (
+            self.additional_parameters['log_box_action_std'].
+            exp().
+            detach().
+            numpy())
+    
+    @property
+    def box_action_distribution(self):
+        box_action_std_t = (
+            self.additional_parameters['log_box_action_std'].
+            exp())
+        return torch.distributions.Normal(
+            torch.zeros_like(box_action_std_t),
+            box_action_std_t)
 
     def _choose_action(self, observation):
         with torch.no_grad():

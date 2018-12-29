@@ -34,15 +34,17 @@ class SimpleTrainer(metaclass=ABCMeta):
 
     def __init__(
             self, env, *, reward_discount, should_render=False, 
-            exploration_prob=0.0, box_action_std_unscalled=0.25):
+            exploration_prob=0.0):
         self.env = env
         self.should_render = should_render
         self.reward_discount = reward_discount
         self.rng = np.random.RandomState()
         self.exploration_prob = exploration_prob
-        if isinstance(env.action_space, Box):
-            self.box_action_std = box_action_std_unscalled * (
-                env.action_space.high - env.action_space.low)
+    
+    @property
+    def box_action_std(self):
+        return 0.25 * (
+            self.env.action_space.high - self.env.action_space.low)
     
     @property
     def box_action_distribution(self):
