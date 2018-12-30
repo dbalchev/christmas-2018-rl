@@ -51,12 +51,7 @@ class AdvantageMixin:
         self.value_optimizer.zero_grad()
         l2_loss.backward()
         self.value_optimizer.step()
+        replay_buffer_sample = {
+            **replay_buffer_sample,
+            'reward': detached_advantage}
         return super()._train_on_replay_buffer(replay_buffer_sample)
-
-
-class ReinforceWithAdvantageTrainer(AdvantageMixin, ReinforceTrainer):
-    pass
-
-
-class PPOTrainer(AdvantageMixin, BasicPPO):
-    pass

@@ -71,7 +71,7 @@ class PolicyOptimizationTrainer(SimpleTrainer):
         self.optimizer = torch.optim.Adam(
             list(self.agent.parameters()) + 
             list(self.additional_parameters.values()), 
-            lr=1e-3)
+            lr=1e-4)
 
     @property
     def box_action_std(self):

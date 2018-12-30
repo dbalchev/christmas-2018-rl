@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractclassmethod
 from collections import UserList
+from warnings import warn
 
 from gym.spaces import Box, Discrete
 import numpy as np
@@ -44,12 +45,13 @@ class SimpleTrainer(metaclass=ABCMeta):
 
     def __init__(
             self, env, *, reward_discount, should_render=False, 
-            exploration_prob=0.0):
+            exploration_prob=0.0, max_episode_length):
         self.env = env
         self.should_render = should_render
         self.reward_discount = reward_discount
         self.rng = np.random.RandomState()
         self.exploration_prob = exploration_prob
+        self.max_episode_length = max_episode_length
     
     @property
     def box_action_std(self):
@@ -80,6 +82,7 @@ class SimpleTrainer(metaclass=ABCMeta):
         pass
     
     def _train_on_episode(self, observations, actions, rewards):
+        warn('Training without replay buffer')
         buffer = ReplayBuffer()
         buffer.append_train_one_episode_result(
             observations, actions, rewards)
@@ -106,7 +109,7 @@ class SimpleTrainer(metaclass=ABCMeta):
             chosen_action = self._choose_action(observation)
             actions.append(chosen_action)
             observation, reward, done, _ = self.env.step(chosen_action)
-            if len(observations) > 750:
+            if len(observations) > self.max_episode_length:
                 done = True
             self._maybe_render()
             observations.append(observation)
@@ -156,6 +159,7 @@ class ReplayBuffer(UserList):
     
     def append_train_one_episode_result(
             self, observations, actions, rewards):
+        self._clip_if_more_elements(len(observations) - 1)
         for i in range(len(observations) - 1):
             self.append({
                 'current_state': observations[i],
@@ -164,16 +168,20 @@ class ReplayBuffer(UserList):
                 'reward': rewards[i],
                 'done': i + 2 == len(observations),
             })
-        self._clip_if_more_elements()
     
-    def _clip_if_more_elements(self):
+    def _clip_if_more_elements(self, num_new_entries):
         if not self.max_size:
             return
-        if len(self) <= self.max_size:
+        if len(self) + num_new_entries <= self.max_size:
+            return
+        if num_new_entries >= self.max_size:
+            print('Too small replay buffer', num_new_entries)
+            self.data.clear()
             return
         self.data = (
             self.rng.choice(
-                self.data, self.max_size, replace=False).
+                self.data, self.max_size - num_new_entries, 
+                replace=False).
             tolist())
 
 
