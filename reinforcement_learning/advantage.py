@@ -1,6 +1,8 @@
 from gym.spaces import Box
+import numpy as np
 import torch
 
+from reinforcement_learning.common import discount_rewards
 from reinforcement_learning.reinforce import (
     ReinforceTrainer, BasicPPO)
 
@@ -33,25 +35,57 @@ class MLPValueModule(torch.nn.Module):
 
 class AdvantageMixin:
     def __init__(
-            self, env, agent, value_module, **kwargs):
+            self, env, agent, value_module, 
+            value_num_trainings_per_batch, **kwargs):
         super().__init__(env=env, agent=agent, **kwargs)
         self.value_module = value_module
         self.value_optimizer = torch.optim.Adam(
             self.value_module.parameters(), lr=1e-3)
+        self.value_num_trainings_per_batch = value_num_trainings_per_batch
+
+    def _extra_buffer_kwargs(
+            self, observations, actions, rewards, discounted_rewards):
+        current_observations = observations[:-1]
+        future_observations = observations[1:]
+        with torch.no_grad():
+            current_state_values = self.value_module(
+                torch.tensor(current_observations, dtype=torch.float32)).numpy()
+            next_state_values = self.value_module(
+                torch.tensor(
+                    future_observations, dtype=torch.float32)).numpy()
+        advantage = (
+            rewards + 
+            self.reward_discount * next_state_values -
+            current_state_values
+        ).tolist()
+        discounted_advantage = discount_rewards(
+            advantage, self.reward_discount * 0.97)
+        return {
+            **super()._extra_buffer_kwargs(
+                observations, actions, rewards, discounted_rewards),
+            'advantage': advantage,
+            'discounted_advantage': discounted_advantage,
+        }
 
     def _train_on_replay_buffer(self, replay_buffer_sample):
         observations = replay_buffer_sample['current_state']
-        rewards = replay_buffer_sample['reward']
-        expected_rewards = self.value_module(
-            torch.tensor(observations, dtype=torch.float32))
-        advantage = torch.tensor(rewards) - expected_rewards
-        detached_advantage = advantage.detach().numpy()
-        l2_loss = torch.nn.functional.mse_loss(
-            advantage, torch.tensor(0.0))
-        self.value_optimizer.zero_grad()
-        l2_loss.backward()
-        self.value_optimizer.step()
+        discounted_rewards = replay_buffer_sample['discounted_reward']
+        first_l2_loss = None
+        for _ in range(self.value_num_trainings_per_batch):
+            expected_rewards = self.value_module(
+                torch.tensor(observations, dtype=torch.float32))
+            l2_loss = torch.nn.functional.mse_loss(
+                expected_rewards, torch.tensor(discounted_rewards))
+            if first_l2_loss is None:
+                first_l2_loss = l2_loss.item()
+            self.value_optimizer.zero_grad()
+            l2_loss.backward()
+            self.value_optimizer.step()
+        advantage = replay_buffer_sample['discounted_advantage']
+        advantage -= np.mean(advantage)
+        advantage /= np.std(advantage) + 1e-6
         replay_buffer_sample = {
             **replay_buffer_sample,
-            'reward': detached_advantage}
+            'discounted_reward': advantage}
+        print('l2_loss', first_l2_loss, l2_loss.item())
         return super()._train_on_replay_buffer(replay_buffer_sample)

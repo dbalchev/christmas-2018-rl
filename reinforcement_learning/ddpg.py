@@ -74,13 +74,14 @@ class DDPGTrainer(SimpleTrainer):
             mean = self.policy(_t([observation]))[0].numpy()
         return self._sample_action(mean)
     
-    def _train_on_episode(self, observations, actions, rewards):
+    def _train_on_episode(
+            self, observations, actions, rewards, discounted_rewards):
         for i in range(len(observations) - 1):
             self.replay_buffer.append({
                 'current_state': observations[i],
                 'future_state': observations[i + 1],
                 'action': actions[i],
-                'reward': rewards[i],
+                'reward': discounted_rewards[i],
                 'done': float(i + 2 == len(observations)),
             })
         self._actual_training()

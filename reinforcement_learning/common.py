@@ -19,9 +19,9 @@ def one_hot(labels, depth):
     return out
 
 
-def _discount_rewards(rewards, discount):
+def discount_rewards(rewards, discount):
     """
-    >>> _discount_rewards([0., 0., 1., 0.], 0.5)
+    >>> discount_rewards([0., 0., 1., 0.], 0.5)
     [0.25, 0.5, 1.0, 0.0]
     """
     current_reward = rewards[-1]
@@ -69,23 +69,33 @@ class SimpleTrainer(metaclass=ABCMeta):
     def train_one_episode(self):
         observations, actions, rewards = self._run_episode()
         total_reward = np.sum(rewards)
-        rewards = _discount_rewards(rewards, self.reward_discount)
-        loss = self._train_on_episode(observations, actions, rewards)
+        discounted_rewards = discount_rewards(
+            rewards, self.reward_discount)
+        loss = self._train_on_episode(
+            observations, actions, rewards, discounted_rewards)
         return total_reward, loss
 
     def _maybe_render(self):
         if self.should_render:
             self.env.render()
+
+    def _extra_buffer_kwargs(
+            self, observations, actions, rewards, discounted_rewards):
+        return {}
     
     @abstractclassmethod
     def _choose_action(self, observation):
         pass
     
-    def _train_on_episode(self, observations, actions, rewards):
+    def _train_on_episode(
+            self, observations, actions, rewards, discounted_rewards):
         warn('Training without replay buffer')
         buffer = ReplayBuffer()
+        extra_kwags = self._extra_buffer_kwargs(
+            observations, actions, rewards, discounted_rewards)
         buffer.append_train_one_episode_result(
-            observations, actions, rewards)
+            observations, actions, rewards, discounted_rewards, 
+            **extra_kwags)
         dict_of_lists = zip_dictionaries(buffer)
         return self._train_on_replay_buffer(dict_of_lists)
     
@@ -158,7 +168,7 @@ class ReplayBuffer(UserList):
             raise ValueError('If there is a max_size pass rng')
     
     def append_train_one_episode_result(
-            self, observations, actions, rewards):
+            self, observations, actions, rewards, discounted_rewards, **kwargs):
         self._clip_if_more_elements(len(observations) - 1)
         for i in range(len(observations) - 1):
             self.append({
@@ -166,7 +176,12 @@ class ReplayBuffer(UserList):
                 'future_state': observations[i + 1],
                 'action': actions[i],
                 'reward': rewards[i],
+                'discounted_reward': rewards[i],
                 'done': i + 2 == len(observations),
+                **{
+                    key: value[i]
+                    for key, value in kwargs.items()
+                },
             })
     
     def _clip_if_more_elements(self, num_new_entries):

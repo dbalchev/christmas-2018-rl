@@ -64,12 +64,13 @@ class QLearningTrainer(SimpleTrainer):
             chosen_action = np.argmax(action_values)
         return chosen_action
     
-    def _train_on_episode(self, observations, actions, rewards):
+    def _train_on_episode(
+            self, observations, actions, rewards, discounted_rewards):
         next_step_estimated_value = 0
-        t = len(rewards)
+        t = len(discounted_rewards)
         losses = []
         for i in range(t - 1, -1, -1):
-            target = rewards[i] - self.reward_discount *  next_step_estimated_value
+            target = discounted_rewards[i] - self.reward_discount *  next_step_estimated_value
             current_step_estimated_value = self.agent(
                 torch.tensor([observations[i]], dtype=torch.float32), 
                 torch.tensor([actions[i]]))

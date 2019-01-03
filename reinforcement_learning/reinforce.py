@@ -71,7 +71,7 @@ class PolicyOptimizationTrainer(SimpleTrainer):
         self.optimizer = torch.optim.Adam(
             list(self.agent.parameters()) + 
             list(self.additional_parameters.values()), 
-            lr=1e-4)
+            lr=3e-4)
 
     @property
     def box_action_std(self):
@@ -114,54 +114,65 @@ class PolicyOptimizationTrainer(SimpleTrainer):
 
 
 class ReinforceTrainer(PolicyOptimizationTrainer):
+
+    def __init__(self, num_trainings_per_batch, **kwargs):
+        super().__init__(**kwargs)
+        self.num_trainings_per_batch = num_trainings_per_batch
+
     def _train_on_replay_buffer(self, replay_buffer_sample):
         observations = replay_buffer_sample['current_state']
-        rewards = replay_buffer_sample['reward']
+        rewards = replay_buffer_sample['discounted_reward']
         actions = replay_buffer_sample['action']
-        action_logits = self.agent(
-            torch.tensor(observations, dtype=torch.float32))
-        chosen_action_log_probabilities = self._chosen_action_log_probabilities(
-            action_logits, actions)
-        loss = -chosen_action_log_probabilities * torch.tensor(
-            rewards, dtype=torch.float32)
-        # action_logits_regularization = torch.nn.functional.mse_loss(
-        #     action_logits, torch.tensor(0.0))
-        loss = loss.mean() # + 1e-4 * action_logits_regularization
-        loss = self._postprocess_loss(loss)
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
+        for _ in range(self.num_trainings_per_batch):
+            action_logits = self.agent(
+                torch.tensor(observations, dtype=torch.float32))
+            chosen_action_log_probabilities = self._chosen_action_log_probabilities(
+                action_logits, actions)
+            loss = -chosen_action_log_probabilities * torch.tensor(
+                rewards, dtype=torch.float32)
+            # action_logits_regularization = torch.nn.functional.mse_loss(
+            #     action_logits, torch.tensor(0.0))
+            loss = loss.mean() # + 1e-4 * action_logits_regularization
+            loss = self._postprocess_loss(loss)
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
         loss_value = loss.detach().item()
         # self.log('action_logits {}', action_logits)
         return loss_value # chosen_action_log_probabilities.detach().numpy()
 
 
 class BasicPPO(PolicyOptimizationTrainer):
-    def __init__(self, ppo_clip_ratio, **kwargs):
+    def __init__(self, ppo_clip_ratio, num_trainings_per_batch, **kwargs):
         super().__init__(**kwargs)
         self.ppo_clip_ratio = ppo_clip_ratio
+        self.num_trainings_per_batch = num_trainings_per_batch
 
     def _train_on_replay_buffer(self, replay_buffer_sample):
         observations = replay_buffer_sample['current_state']
-        rewards = replay_buffer_sample['reward']
+        rewards = replay_buffer_sample['discounted_reward']
         actions = replay_buffer_sample['action']
-        action_logits = self.agent(
-            torch.tensor(observations, dtype=torch.float32))
-        chosen_action_log_probabilities = self._chosen_action_log_probabilities(
-            action_logits, actions)
-        relative_prob = (
-            chosen_action_log_probabilities - 
-            chosen_action_log_probabilities.detach()).exp()
-        clipped_relative_prob = torch.clamp(
-            relative_prob, 
-            1 - self.ppo_clip_ratio,
-            1 + self.ppo_clip_ratio)
-        rewards_t = torch.tensor(rewards, dtype=torch.float32)
-        objective = torch.min(
-            relative_prob * rewards_t,
-            clipped_relative_prob * rewards_t).mean()
-        self.optimizer.zero_grad()
-        (-objective).backward()
-        self.optimizer.step()
+        benchmark_log_prob = None
+        for _ in range(self.num_trainings_per_batch):
+            action_logits = self.agent(
+                torch.tensor(observations, dtype=torch.float32))
+            chosen_action_log_probabilities = self._chosen_action_log_probabilities(
+                action_logits, actions)
+            if benchmark_log_prob is None:
+                benchmark_log_prob = chosen_action_log_probabilities.detach()
+            relative_prob = (
+                chosen_action_log_probabilities - 
+                benchmark_log_prob).exp()
+            clipped_relative_prob = torch.clamp(
+                relative_prob, 
+                1 - self.ppo_clip_ratio,
+                1 + self.ppo_clip_ratio)
+            rewards_t = torch.tensor(rewards, dtype=torch.float32)
+            objective = torch.min(
+                relative_prob * rewards_t,
+                clipped_relative_prob * rewards_t).mean()
+            self.optimizer.zero_grad()
+            (-objective).backward()
+            self.optimizer.step()
         return objective.detach().item()
-        
+            
