@@ -1,5 +1,5 @@
 backcall==0.1.0
-bleach==3.0.2
+bleach==3.3.0
 box2d-py==2.3.8
 certifi==2018.11.29
 cffi==1.11.5
